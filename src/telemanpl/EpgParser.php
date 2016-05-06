@@ -8,6 +8,7 @@ namespace telemanpl;
  * If channel name consists of several words, url must be like http://www.teleman.pl/program-tv/stacje/Filmbox-Extra-HD
  *
  * Class EpgParser
+ * @property \DateTime $currentDay
  * @property array $categories Channels categories(sections)
  * @package telemanpl
  */
@@ -19,6 +20,7 @@ class EpgParser extends BaseEpgParser
 
     protected $channelsPage = null;
     protected $currentChannel = null;
+    protected $currentDay;
 
 
     public function loadChannels() {
@@ -151,6 +153,7 @@ class EpgParser extends BaseEpgParser
     public function loadDay($day, $channelName) {
         try {
             $dayObject = new \DateTime($day);
+            $this->currentDay = $dayObject;
         } catch (\Exception $e) {
             $this->setError($e->getMessage());
             return false;
@@ -164,7 +167,7 @@ class EpgParser extends BaseEpgParser
             $this->setError($this->curlError);
             return false;
         }
-        if ($this->curlInfo['http_code'] != '200' ) {
+        if ($this->curlInfo['http_code'] != '200') {
             $this->setError("http code is not OK or content is invalid " . $this->curlInfo['http_code'] . "/" . $this->curlInfo['content_type']);
             return false;
         }
@@ -202,7 +205,53 @@ class EpgParser extends BaseEpgParser
                 $this->parseStationItems($ul->getElementsByTagName('li'));
             }
         }
+
+        $this->calcProgramsLength();
+
+
         return $this->programs;
+    }
+
+    protected function calcProgramsLength() {
+        $day = $this->currentDay->format('Y-m-d');
+
+        foreach ($this->programs as $num => $program) {
+            $nextDay = false;
+            try {
+                $previousStart = 0;
+                if (isset($start)) {
+                    $previousStart = $start->getTimestamp();
+                }
+                list($hour, $minutes) = explode(":", $program['start']);
+                if ($hour < 10) {
+                    $hour = sprintf("%02d", $hour);
+                }
+                $time = $day . " " . $hour . ":" . $minutes . ":00";
+                $start = new \DateTime($time);
+                if ($start->getTimestamp() < $previousStart) {
+                    var_dump("SHIFTED");
+                    $start->modify("+1 day");
+                }
+                if (isset($this->programs[$num + 1])) {
+                    list($hourEnd, $minutesEnd) = explode(":", $this->programs[$num + 1]['start']);
+                    if ($hourEnd < 10) {
+                        $hourEnd = sprintf("%02d", $hourEnd);
+                    }
+                    $timeEnd = $day . " " . $hourEnd . ":" . $minutesEnd . ":00";
+
+                    $end = new \DateTime($timeEnd);
+                    if ($end->getTimestamp() < $start->getTimestamp()) {
+                        $end->modify("+1 day");
+                    }
+                    $this->programs[$num]['length'] = $end->getTimestamp() - $start->getTimestamp();
+                    var_dump($this->programs[$num]['length']);
+                }
+            } catch (\Exception $e) {
+                $this->setError($e->getMessage());
+                continue;
+            }
+
+        }
     }
 
     /**
