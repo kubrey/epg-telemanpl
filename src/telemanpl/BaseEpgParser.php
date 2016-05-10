@@ -1,10 +1,4 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: kubrey
- * Date: 06.05.16
- * Time: 14:55
- */
 
 namespace telemanpl;
 

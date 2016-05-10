@@ -29,7 +29,7 @@ class EpgParser extends BaseEpgParser
             $this->setError($this->curlError);
             return false;
         }
-        if ($this->curlInfo['http_code'] != '200' || strpos($this->curlInfo['content_type'], 'application/json') === false) {
+        if ($this->curlInfo['http_code'] != '200') {
             $this->setError("http code is not OK or content is invalid " . $this->curlInfo['http_code'] . "/" . $this->curlInfo['content_type']);
             return false;
         }
@@ -93,6 +93,74 @@ class EpgParser extends BaseEpgParser
 
         unset($dom);
 
+    }
+
+    /**
+     * Parsing day's first program
+     * @param string $day
+     * @param string $channelName
+     * @return bool
+     */
+    protected function parseDayFirstProgram($day, $channelName) {
+        try {
+            $dayObject = new \DateTime($day);
+        } catch (\Exception $e) {
+            $this->setError($e->getMessage());
+            return false;
+        }
+        $this->currentChannel = $channelName;
+        $channelName = str_replace(" ", "-", trim($channelName));
+
+        $url = $this->config['baseUrl'] . $channelName . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
+        $this->initCurl($url)->runCurl();
+        if ($this->curlError) {
+            $this->setError($this->curlError);
+            return false;
+        }
+        if ($this->curlInfo['http_code'] != '200') {
+            $this->setError("http code is not OK or content is invalid " . $this->curlInfo['http_code'] . "/" . $this->curlInfo['content_type']);
+            return false;
+        }
+
+        $page = $this->curlResult;
+
+        if (!$page) {
+            $this->setError("No page content is set");
+            return false;
+        }
+        $dom = new \DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->validateOnParse = true;
+        @$dom->loadHTML($page);
+        $main = $dom->getElementById("stationListing");
+        if (!$main) {
+            unset($dom);
+            $this->setError("No main block");
+            return false;
+        }
+        $uls = $main->getElementsByTagName('ul');
+        if (!$uls || !$uls->length) {
+            return false;
+        }
+        $programs = array();
+        foreach ($uls as $ul) {
+            /**
+             * @var \DOMElement $ul
+             */
+            if ($ul->getAttribute('class') == 'stationItems') {
+                $programWrappers = $ul->getElementsByTagName('li');
+                if (!$programWrappers || !$programWrappers->length) {
+                    break;
+                }
+
+                $programs = $this->parseStationItems($programWrappers, 1);
+                break;
+            }
+        }
+        if ($programs) {
+            return current($programs);
+        }
+        return false;
     }
 
     /**
@@ -162,6 +230,7 @@ class EpgParser extends BaseEpgParser
         $channelName = str_replace(" ", "-", trim($channelName));
 
         $url = $this->config['baseUrl'] . $channelName . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
+        var_dump($url);
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
             $this->setError($this->curlError);
@@ -202,7 +271,12 @@ class EpgParser extends BaseEpgParser
              * @var \DOMElement $ul
              */
             if ($ul->getAttribute('class') == 'stationItems') {
-                $this->parseStationItems($ul->getElementsByTagName('li'));
+                $programs = $this->parseStationItems($ul->getElementsByTagName('li'));
+                if ($programs) {
+                    foreach ($programs as $program) {
+                        array_push($this->programs, $program);
+                    }
+                }
             }
         }
 
@@ -212,15 +286,22 @@ class EpgParser extends BaseEpgParser
         return $this->programs;
     }
 
+    /**
+     * Calculating program's length
+     * Each program has only start time
+     * To calculate last program's length we have to parse next day epg
+     */
     protected function calcProgramsLength() {
         $day = $this->currentDay->format('Y-m-d');
+        $before = null;
 
         foreach ($this->programs as $num => $program) {
             $nextDay = false;
             try {
+
                 $previousStart = 0;
-                if (isset($start)) {
-                    $previousStart = $start->getTimestamp();
+                if ($before && $before instanceof \DateTime) {
+                    $previousStart = $before->getTimestamp();
                 }
                 list($hour, $minutes) = explode(":", $program['start']);
                 if ($hour < 10) {
@@ -228,8 +309,11 @@ class EpgParser extends BaseEpgParser
                 }
                 $time = $day . " " . $hour . ":" . $minutes . ":00";
                 $start = new \DateTime($time);
+                $before = $start;
+                $shift = false;
                 if ($start->getTimestamp() < $previousStart) {
-                    var_dump("SHIFTED");
+                    //means that current program's time is earlier than previous -> current program starts after midnight (eg 00:40)
+                    $shift = true;
                     $start->modify("+1 day");
                 }
                 if (isset($this->programs[$num + 1])) {
@@ -240,12 +324,37 @@ class EpgParser extends BaseEpgParser
                     $timeEnd = $day . " " . $hourEnd . ":" . $minutesEnd . ":00";
 
                     $end = new \DateTime($timeEnd);
-                    if ($end->getTimestamp() < $start->getTimestamp()) {
+                    if ($shift) {
                         $end->modify("+1 day");
                     }
-                    $this->programs[$num]['length'] = $end->getTimestamp() - $start->getTimestamp();
-                    var_dump($this->programs[$num]['length']);
+                    if ($end->getTimestamp() < $start->getTimestamp())
+                        //if current program's ending time is earlier then it's start (eg 23:40 - 00:20)
+                        $end->modify("+1 day");
+                } else {
+                    if ($shift) {
+                        $next = $start->format('Y-m-d');
+                    } else {
+                        $tmp = new \DateTime($start->format('Y-m-d H:i:s'));
+                        $tmp->modify("+1 day");
+                        $next = $tmp->format('Y-m-d');
+                        unset($tmp);
+                    }
+                    $nextProgram = $this->parseDayFirstProgram($next, $this->currentChannel);
+                    if (!$nextProgram) {
+                        $this->setError("Failed to get very last program info; fallback to 6:00 am");
+                        //fallback to 6:00 AM as end of very last program;
+                        $timeEnd = $next . " 06:00:00";
+                    } else {
+                        list($hourEnd, $minutesEnd) = explode(":", $nextProgram['start']);
+                        if ($hourEnd < 10) {
+                            $hourEnd = sprintf("%02d", $hourEnd);
+                        }
+                        $timeEnd = $next . " " . $hourEnd . ":" . $minutesEnd . ":00";
+                    }
+                    $end = new \DateTime($timeEnd);
+                    //need to parse next day
                 }
+                $this->programs[$num]['length'] = ($end->getTimestamp() - $start->getTimestamp()) / 60;
             } catch (\Exception $e) {
                 $this->setError($e->getMessage());
                 continue;
@@ -256,9 +365,10 @@ class EpgParser extends BaseEpgParser
 
     /**
      * @param \DOMNodeList $data
-     * @return bool
+     * @param int|null $limit limit number of parsed programs
+     * @return bool|array
      */
-    protected function parseStationItems($data) {
+    protected function parseStationItems($data, $limit = null) {
         if (!$data || !$data->length) {
             return false;
         }
@@ -338,18 +448,29 @@ class EpgParser extends BaseEpgParser
                 }
             }
             $program['channel'] = $this->currentChannel;
-            array_push($this->programs, $program);
             array_push($programs, $program);
+            if ($limit && count($programs) == $limit) {
+                break;
+            }
         }
 
         return $programs;
     }
 
-    public function getProgramInfo($id) {
+    /**
+     * Programs array has enough information about each program
+     * @unused
+     * @param $url
+     */
+    public function getProgramInfo($url) {
 
     }
 
-    public function parseProgramData($json = array()) {
+    /**
+     * @unused
+     * @param $page
+     */
+    public function parseProgramData($page) {
 
     }
 
