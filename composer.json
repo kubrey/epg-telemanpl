@@ -19,8 +19,8 @@
   },
   "autoload": {
     "psr-0": {
-      "ncplus": "src"
+      "telemanpl": "src"
     }
   },
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
