@@ -55,6 +55,8 @@ array(29) {
     string(143) "Przegląd wydarzeń z całego świata. Widzowie zobaczą nie tylko wiadomości polityczne i gospodarcze, ale także informacje z życia gwiazd."
     ["channel"]=>
     string(4) "Puls"
+    ["dateStart"]=>
+    string(10) "2016-05-12"
     ["length"]=>
     int(50)
   }
@@ -72,6 +74,8 @@ array(29) {
     string(183) " Zwykłym ludziom na całym świecie przydarzają się ciekawe, zaskakujące sytuacje, niekiedy wywołujące napięcie, innym razem śmiech. Jarosław Budnik przybliża niesamowite..."
     ["channel"]=>
     string(4) "Puls"
+    ["dateStart"]=>
+    string(10) "2016-05-12"
     ["length"]=>
     int(30)
   }

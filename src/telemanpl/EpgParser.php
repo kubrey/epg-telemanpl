@@ -355,6 +355,7 @@ class EpgParser extends BaseEpgParser
                     //need to parse next day
                 }
                 $this->programs[$num]['length'] = ($end->getTimestamp() - $start->getTimestamp()) / 60;
+                $this->programs[$num]['dateStart'] = $start->format('Y-m-d');
             } catch (\Exception $e) {
                 $this->setError($e->getMessage());
                 continue;
