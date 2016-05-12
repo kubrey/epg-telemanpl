@@ -33,7 +33,6 @@ class EpgChannelParser extends BaseEpgParser
      * @return array|bool  array of channels each channel as [url=>'',name=>'']
      */
     public function parseIndexPage($page) {
-        echo __LINE__;
         $id = "stationsIndex";
         if (!$page) {
             $this->setError("No index page content is set");

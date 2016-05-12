@@ -18,7 +18,7 @@ class EpgParser extends BaseEpgParser
 {
 
     protected $programs = array();
-
+    protected $programParser;
 
     protected $currentChannel = null;
     protected $currentDay;
@@ -29,6 +29,7 @@ class EpgParser extends BaseEpgParser
     public function __construct($options = array()) {
         parent::__construct($options);
         $this->channelParser = new EpgChannelParser($options);
+        $this->programParser = new EpgProgramParser($options);
     }
 
 
@@ -181,7 +182,6 @@ class EpgParser extends BaseEpgParser
         }
 
         $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
-        var_dump($url);
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
             $this->setError($this->curlError);
@@ -196,9 +196,10 @@ class EpgParser extends BaseEpgParser
 
     /**
      * @param $page
+     * @param bool $extended Set true to parse additional data for each program(rating, director,bigger description, actors)
      * @return bool|array
      */
-    public function parseDaySchedule($page) {
+    public function parseDaySchedule($page, $extended = false) {
         if (!$page) {
             $this->setError("No page content is set");
             return false;
@@ -217,6 +218,7 @@ class EpgParser extends BaseEpgParser
         if (!$uls || !$uls->length) {
             return false;
         }
+        $urlData = parse_url($this->config['baseUrl']);
         foreach ($uls as $ul) {
             /**
              * @var \DOMElement $ul
@@ -225,6 +227,15 @@ class EpgParser extends BaseEpgParser
                 $programs = $this->parseStationItems($ul->getElementsByTagName('li'));
                 if ($programs) {
                     foreach ($programs as $program) {
+                        if ($extended) {
+                            $progPage = $this->getProgramInfo($urlData['scheme'] . "://" . $urlData['host'] . $program['url']);
+                            $progData = $this->parseProgramData($progPage);
+                            if ($progData) {
+                                foreach ($progData as $key => $v) {
+                                    $program[$key] = $v;
+                                }
+                            }
+                        }
                         array_push($this->programs, $program);
                     }
                 }
@@ -410,21 +421,22 @@ class EpgParser extends BaseEpgParser
     }
 
     /**
-     * Programs array has enough information about each program
-     * @unused
+     *
      * @param $url
+     * @return string|bool
      */
     public function getProgramInfo($url) {
-
+        return $this->programParser->getProgramInfo($url);
     }
 
     /**
-     * @unused
      * @param $page
+     * @return bool|array
      */
     public function parseProgramData($page) {
-
+        return $this->programParser->parseProgramData($page);
     }
+
 
     /**
      * @return array
