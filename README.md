@@ -31,6 +31,7 @@ use teleman/EpgParser;
 
 $parser = new EpgParser();
 // to get all channels programs for day
+// second parameter of loadDay method can be either channel name or it's id
 $data = $parser->loadDay(date('Y-m-d'),'TVN 7');
 if($data){
     $programs = $parser->parseDaySchedule($data);

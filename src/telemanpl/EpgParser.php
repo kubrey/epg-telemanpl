@@ -2,6 +2,7 @@
 
 namespace telemanpl;
 
+
 /**
  * All channels http://www.teleman.pl/moje-stacje
  * Programs for channel and day http://www.teleman.pl/program-tv/stacje/Puls?date=2016-05-13&hour=-1 - channel Puls for 2016-05-13 - hour=-1 - за весь день
@@ -10,31 +11,32 @@ namespace telemanpl;
  * Class EpgParser
  * @property \DateTime $currentDay
  * @property array $categories Channels categories(sections)
+ * @property EpgChannelParser $channelParser
  * @package telemanpl
  */
 class EpgParser extends BaseEpgParser
 {
-    protected $categories = array();
-    protected $channels = array();
+
     protected $programs = array();
 
-    protected $channelsPage = null;
+
     protected $currentChannel = null;
     protected $currentDay;
 
+    /**
+     * @param array $options
+     */
+    public function __construct($options = array()) {
+        parent::__construct($options);
+        $this->channelParser = new EpgChannelParser($options);
+    }
 
+
+    /**
+     * @return bool|null
+     */
     public function loadChannels() {
-        $this->initCurl($this->config['channelsUrl'])->runCurl();
-        if ($this->curlError) {
-            $this->setError($this->curlError);
-            return false;
-        }
-        if ($this->curlInfo['http_code'] != '200') {
-            $this->setError("http code is not OK or content is invalid " . $this->curlInfo['http_code'] . "/" . $this->curlInfo['content_type']);
-            return false;
-        }
-        $this->channelsPage = $this->curlResult;
-        return $this->channelsPage;
+        return $this->channelParser->loadChannels();
     }
 
     /**
@@ -42,57 +44,33 @@ class EpgParser extends BaseEpgParser
      * @return bool
      */
     public function parseChannels($page) {
-        if (!$page) {
-            $this->setError("No page content is set");
+        //getting main channels info(id,name,category)
+        if (!$this->channelParser->parseChannels($page)) {
             return false;
         }
-        $dom = new \DOMDocument();
-        $dom->preserveWhiteSpace = false;
-        $dom->validateOnParse = true;
-        @$dom->loadHTML($page);
-        $form = $dom->getElementById("user-stations-form");
-        if (!$form) {
-            unset($dom);
-            $this->setError("No stations form");
-            return false;
-        }
-        $sections = $form->getElementsByTagName('div');
-        if (!$sections || !$sections->length) {
-            unset($dom);
-            $this->setError("No sections found for stations");
-            return false;
-        }
-        foreach ($sections as $section) {
-            /**
-             * @var \DOMElement $section
-             */
-            if (strpos($section->getAttribute('class'), 'section') === false) {
-                continue;
-            }
-            $categoryList = $section->getElementsByTagName('h2');
-            if (!$categoryList || !$categoryList->length) {
-                continue;
-            }
-            $category = $categoryList->item(0)->textContent;
-            $this->categories[] = $category;
-            $divContainer = $section->getElementsByTagName('div');
-            if (!$divContainer || !$divContainer->length) {
-                continue;
-            }
-            /**
-             * @var \DOMElement $container
-             */
-            $container = $divContainer->item(0);
-            $uls = $container->getElementsByTagName('ul');
-            if (!$uls || !$uls->length) {
-                continue;
-            }
-            $this->parseSectionUnsignedLists($uls, $category);
+        $index = $this->channelParser->loadIndexPage();
 
+        if ($index) {
+            $chanData = $this->channelParser->parseIndexPage($index);
+            if ($chanData) {
+                $found = $this->channelParser->getChannels();
+                $foundHandled = array();
+                foreach ($found as $f) {
+                    $foundHandled[$f['name']] = $f;
+                }
+                //adding url to channel info array
+                foreach ($chanData as $chan) {
+                    if (isset($foundHandled[$chan['name']])) {
+                        $foundHandled[$chan['name']]['url'] = $chan['url'];
+                    }
+                }
+                $this->channelParser->setChannels(array_values($foundHandled));
+            }
         }
-
-        unset($dom);
-
+        foreach ($this->channelParser->getErrors() as $err) {
+            $this->setError($err);
+        }
+        return true;
     }
 
     /**
@@ -163,62 +141,14 @@ class EpgParser extends BaseEpgParser
         return false;
     }
 
-    /**
-     * @param \DOMNodeList $lists
-     * @param string $category
-     * @return bool|array
-     */
-    protected function parseSectionUnsignedLists($lists, $category) {
-        if (!$lists || !$lists->length) {
-            return false;
-        }
-        $channels = array();
-        foreach ($lists as $list) {
-            /**
-             * @var \DOMElement $list
-             */
-            $lis = $list->getElementsByTagName('li');
-            if (!$lis || !$lis->length) {
-                continue;
-            }
-            $channel = array();
-
-            foreach ($lis as $li) {
-                /**
-                 * @var \DOMElement $li
-                 */
-                $spans = $li->getElementsByTagName('span');
-                if (!$spans || !$spans->length) {
-                    continue;
-                }
-                $channelName = $spans->item(0)->textContent;
-                $inputs = $li->getElementsByTagName('input');
-                if (!$inputs || !$inputs->length) {
-                    continue;
-                }
-                $channelData = $inputs->item(0);
-                /**
-                 * @var \DOMElement $channelData
-                 */
-                $channelId = $channelData->getAttribute('value');
-                $channel['id'] = $channelId;
-                $channel['name'] = $channelName;
-                $channel['category'] = $category;
-                array_push($channels, $channel);
-                array_push($this->channels, $channel);
-            }
-        }
-        unset($lists);
-        return $channels;
-    }
 
     /**
      *
      * @param string $day as Y-m-d
-     * @param string $channelName
+     * @param string|int $channel channel name or id. If you pass id - it should be strict int,eg not "13" but 13.
      * @return array|boolean
      */
-    public function loadDay($day, $channelName) {
+    public function loadDay($day, $channel) {
         try {
             $dayObject = new \DateTime($day);
             $this->currentDay = $dayObject;
@@ -226,10 +156,31 @@ class EpgParser extends BaseEpgParser
             $this->setError($e->getMessage());
             return false;
         }
-        $this->currentChannel = $channelName;
-        $channelName = str_replace(" ", "-", trim($channelName));
 
-        $url = $this->config['baseUrl'] . $channelName . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
+        $channels = $this->channelParser->getChannels();
+        if (!$channels) {
+            $chanPage = $this->loadChannels();
+            if (!$this->parseChannels($chanPage)) {
+                return false;
+            }
+        }
+        $searchField = is_int($channel) ? "id" : "name";
+        $urlData = parse_url($this->config['baseUrl']);
+        $url = null;
+        foreach ($this->channelParser->getChannels() as $chanInfo) {
+            if (isset($chanInfo[$searchField]) && $chanInfo[$searchField] = (string)$channel) {
+                $this->currentChannel = $chanInfo['name'];
+                $url = $urlData['scheme'] . "://" . $urlData['host'] . $chanInfo['url'];
+                break;
+            }
+        }
+
+        if (!$url) {
+            $this->setError("Failed to find chanel url for: " . $channel);
+            return false;
+        }
+
+        $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
         var_dump($url);
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
@@ -479,14 +430,14 @@ class EpgParser extends BaseEpgParser
      * @return array
      */
     public function getChannels() {
-        return $this->channels;
+        return $this->channelParser->getChannels();
     }
 
     /**
      * @return array
      */
     public function getCategories() {
-        return $this->categories;
+        return $this->channelParser->getCategories();
     }
 
 }

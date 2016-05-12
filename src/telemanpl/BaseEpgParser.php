@@ -13,6 +13,8 @@ class BaseEpgParser
         'curlTorPort' => null //set if curlTor is true(default 9050)
     );
 
+    protected $channelParser;
+
     protected $curlOptions = array();
     protected $curlError = null;
     protected $curlResult = null;
@@ -55,6 +57,11 @@ class BaseEpgParser
             $this->curlOptions[CURLOPT_COOKIE] = $cookie;
             $this->curlOptions[CURLOPT_FOLLOWLOCATION] = 1;
             $this->curlOptions[CURLOPT_RETURNTRANSFER] = 1;
+        }
+        $urlParts = parse_url($url);
+        if ($urlParts['scheme'] == 'https') {
+            $this->curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+            $this->curlOptions[CURLOPT_SSL_VERIFYPEER] = 0;
         }
         $this->curlOptions[CURLOPT_URL] = $url;
         if ($this->config['curlProxy']) {
