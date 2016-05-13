@@ -33,6 +33,9 @@ $parser = new EpgParser();
 // to get all channels programs for day
 // second parameter of loadDay method can be either channel name or it's id
 $data = $parser->loadDay(date('Y-m-d'),'TVN 7');
+
+//also you can pass the third argument - channel url(This will make parsing faster because of no need to get all channels list beforehand)
+$data = $parser->loadDay(date('Y-m-d'),'TVN 7','program-tv/stacje/TVN-Siedem');
 if($data){
     $programs = $parser->parseDaySchedule($data);
 }

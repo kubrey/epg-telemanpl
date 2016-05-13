@@ -21,6 +21,7 @@ class EpgParser extends BaseEpgParser
     protected $programParser;
 
     protected $currentChannel = null;
+    protected $currentChannelUrl = null;
     protected $currentDay;
 
     /**
@@ -78,9 +79,10 @@ class EpgParser extends BaseEpgParser
      * Parsing day's first program
      * @param string $day
      * @param string $channelName
+     * @param string $channelUrl
      * @return bool
      */
-    protected function parseDayFirstProgram($day, $channelName) {
+    protected function parseDayFirstProgram($day, $channelName, $channelUrl) {
         try {
             $dayObject = new \DateTime($day);
         } catch (\Exception $e) {
@@ -88,9 +90,14 @@ class EpgParser extends BaseEpgParser
             return false;
         }
         $this->currentChannel = $channelName;
-        $channelName = str_replace(" ", "-", trim($channelName));
+        $this->currentChannelUrl = $channelUrl;
 
-        $url = $this->config['baseUrl'] . $channelName . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
+        $urlData = parse_url($this->config['baseUrl']);
+
+        $parts = parse_url($channelUrl);
+        $url = $urlData['scheme'] . "://" . $urlData['host'] . "/" . trim($parts['path'], "/");
+
+        $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
             $this->setError($this->curlError);
@@ -147,9 +154,10 @@ class EpgParser extends BaseEpgParser
      *
      * @param string $day as Y-m-d
      * @param string|int $channel channel name or id. If you pass id - it should be strict int,eg not "13" but 13.
+     * @param null|string $channelUrl url to channel (full or relative with leading slash) eg /program-tv/stacje/TVN-Siedem
      * @return array|boolean
      */
-    public function loadDay($day, $channel) {
+    public function loadDay($day, $channel, $channelUrl = null) {
         try {
             $dayObject = new \DateTime($day);
             $this->currentDay = $dayObject;
@@ -157,29 +165,38 @@ class EpgParser extends BaseEpgParser
             $this->setError($e->getMessage());
             return false;
         }
-
-        $channels = $this->channelParser->getChannels();
-        if (!$channels) {
-            $chanPage = $this->loadChannels();
-            if (!$this->parseChannels($chanPage)) {
-                return false;
-            }
-        }
-        $searchField = is_int($channel) ? "id" : "name";
-        $urlData = parse_url($this->config['baseUrl']);
         $url = null;
-        foreach ($this->channelParser->getChannels() as $chanInfo) {
-            if (isset($chanInfo[$searchField]) && $chanInfo[$searchField] = (string)$channel) {
-                $this->currentChannel = $chanInfo['name'];
-                $url = $urlData['scheme'] . "://" . $urlData['host'] . $chanInfo['url'];
-                break;
+        $urlData = parse_url($this->config['baseUrl']);
+
+        if ($channelUrl) {
+            $parts = parse_url($channelUrl);
+            $url = $urlData['scheme'] . "://" . $urlData['host'] . "/" . trim($parts['path'], "/");
+        } else {
+            //getting url from list of channels
+            $channels = $this->channelParser->getChannels();
+            if (!$channels) {
+                $chanPage = $this->loadChannels();
+                if (!$this->parseChannels($chanPage)) {
+                    return false;
+                }
+            }
+            $searchField = is_int($channel) ? "id" : "name";
+
+
+            foreach ($this->channelParser->getChannels() as $chanInfo) {
+                if (isset($chanInfo[$searchField]) && $chanInfo[$searchField] = (string)$channel) {
+                    $this->currentChannel = $chanInfo['name'];
+                    $url = $urlData['scheme'] . "://" . $urlData['host'] . $chanInfo['url'];
+                    break;
+                }
             }
         }
 
         if (!$url) {
-            $this->setError("Failed to find chanel url for: " . $channel);
+            $this->setError("Failed to find chanel url for: " . $channel . "/" . $channelUrl);
             return false;
         }
+        $this->currentChannelUrl = $url;
 
         $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
         $this->initCurl($url)->runCurl();
@@ -301,7 +318,7 @@ class EpgParser extends BaseEpgParser
                         $next = $tmp->format('Y-m-d');
                         unset($tmp);
                     }
-                    $nextProgram = $this->parseDayFirstProgram($next, $this->currentChannel);
+                    $nextProgram = $this->parseDayFirstProgram($next, $this->currentChannel, $this->currentChannelUrl);
                     if (!$nextProgram) {
                         $this->setError("Failed to get very last program info; fallback to 6:00 am");
                         //fallback to 6:00 AM as end of very last program;
