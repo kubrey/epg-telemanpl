@@ -184,7 +184,7 @@ class EpgParser extends BaseEpgParser
 
 
             foreach ($this->channelParser->getChannels() as $chanInfo) {
-                if (isset($chanInfo[$searchField]) && $chanInfo[$searchField] = (string)$channel) {
+                if (isset($chanInfo[$searchField]) && $chanInfo[$searchField] == (string)$channel) {
                     $this->currentChannel = $chanInfo['name'];
                     $url = $urlData['scheme'] . "://" . $urlData['host'] . $chanInfo['url'];
                     break;
