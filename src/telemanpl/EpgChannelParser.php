@@ -42,7 +42,8 @@ class EpgChannelParser extends BaseEpgParser
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->validateOnParse = true;
-        @$dom->loadHTML($page);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $page);
+        $dom->encoding = 'UTF-8';
         $wrap = $dom->getElementById($id);
         if (!$wrap) {
             unset($dom);

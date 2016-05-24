@@ -117,7 +117,8 @@ class EpgParser extends BaseEpgParser
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->validateOnParse = true;
-        @$dom->loadHTML($page);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $page);
+        $dom->encoding = 'UTF-8';
         $main = $dom->getElementById("stationListing");
         if (!$main) {
             unset($dom);
@@ -224,7 +225,8 @@ class EpgParser extends BaseEpgParser
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->validateOnParse = true;
-        @$dom->loadHTML($page);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $page);
+        $dom->encoding = 'UTF-8';
         $main = $dom->getElementById("stationListing");
         if (!$main) {
             unset($dom);
