@@ -209,6 +209,7 @@ class EpgParser extends BaseEpgParser
             $this->setError("http code is not OK or content is invalid " . $this->curlInfo['http_code'] . "/" . $this->curlInfo['content_type']);
             return false;
         }
+//        file_put_contents($channel.".log",$this->curlResult);
         return $this->curlResult;
     }
 
@@ -222,6 +223,7 @@ class EpgParser extends BaseEpgParser
             $this->setError("No page content is set");
             return false;
         }
+        $this->programs = array();
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->validateOnParse = true;
