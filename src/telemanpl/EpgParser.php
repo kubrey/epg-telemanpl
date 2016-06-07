@@ -100,7 +100,11 @@ class EpgParser extends BaseEpgParser
         $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
-            $this->setError($this->curlError);
+            $error = $this->curlError . "\n Url: " . $url . ";";
+            if (isset($this->curlOptions[CURLOPT_PROXY])) {
+                $error .= "\n Proxy: " . $this->curlOptions[CURLOPT_PROXY];
+            }
+            $this->setError($error);
             return false;
         }
         if ($this->curlInfo['http_code'] != '200') {
@@ -202,7 +206,11 @@ class EpgParser extends BaseEpgParser
         $url = $url . "?date=" . $dayObject->format('Y-m-d') . "&hour=-1";
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
-            $this->setError($this->curlError);
+            $error = $this->curlError . "\n Url: " . $url . ";";
+            if (isset($this->curlOptions[CURLOPT_PROXY])) {
+                $error .= "\n Proxy: " . $this->curlOptions[CURLOPT_PROXY];
+            }
+            $this->setError($error);
             return false;
         }
         if ($this->curlInfo['http_code'] != '200') {

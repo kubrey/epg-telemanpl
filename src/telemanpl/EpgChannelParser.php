@@ -17,7 +17,11 @@ class EpgChannelParser extends BaseEpgParser
         $url = $urlParts['scheme'] . "://" . $urlParts['host'];
         $this->initCurl($url)->runCurl();
         if ($this->curlError) {
-            $this->setError($this->curlError);
+            $error = $this->curlError . "\n Url: " . $this->curlInfo['url'] . ";";
+            if (isset($this->curlOptions[CURLOPT_PROXY])) {
+                $error .= "\n Proxy: " . $this->curlOptions[CURLOPT_PROXY];
+            }
+            $this->setError($error);
             return false;
         }
         if ($this->curlInfo['http_code'] != '200') {
@@ -91,7 +95,11 @@ class EpgChannelParser extends BaseEpgParser
     public function loadChannels() {
         $this->initCurl($this->config['channelsUrl'])->runCurl();
         if ($this->curlError) {
-            $this->setError($this->curlError);
+            $error = $this->curlError . "\n Url: " . $this->curlInfo['url'] . ";";
+            if (isset($this->curlOptions[CURLOPT_PROXY])) {
+                $error .= "\n Proxy: " . $this->curlOptions[CURLOPT_PROXY];
+            }
+            $this->setError($error);
             return false;
         }
         if ($this->curlInfo['http_code'] != '200') {

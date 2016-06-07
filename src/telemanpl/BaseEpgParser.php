@@ -16,6 +16,7 @@ class BaseEpgParser
     protected $channelParser;
 
     protected $curlOptions = array();
+    protected $userCurlOptions = array();
     protected $curlError = null;
     protected $curlResult = null;
     protected $curlInfo = array();
@@ -39,7 +40,7 @@ class BaseEpgParser
      * @return $this
      */
     public function setCurlOption($key, $val) {
-        $this->curlOptions[$key] = $val;
+        $this->userCurlOptions[$key] = $val;
         return $this;
     }
 
@@ -49,6 +50,7 @@ class BaseEpgParser
      */
     protected function initCurl($url) {
         $this->resetCurl();
+        $this->curlOptions = $this->userCurlOptions;
         if (!$this->curlOptions) {
             $this->curlOptions[CURLOPT_USERAGENT] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36";
             $this->curlOptions[CURLOPT_TIMEOUT] = 60;
