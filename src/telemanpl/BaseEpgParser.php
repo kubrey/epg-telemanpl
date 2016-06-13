@@ -50,15 +50,17 @@ class BaseEpgParser
      */
     protected function initCurl($url) {
         $this->resetCurl();
-        $this->curlOptions = $this->userCurlOptions;
-        if (!$this->curlOptions || $this->curlOptions == $this->userCurlOptions) {
-            $this->curlOptions[CURLOPT_USERAGENT] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36";
-            $this->curlOptions[CURLOPT_TIMEOUT] = 60;
-            $cookie = "epg_cookie.txt";
-            $this->curlOptions[CURLOPT_COOKIEJAR] = $cookie;
-            $this->curlOptions[CURLOPT_COOKIE] = $cookie;
-            $this->curlOptions[CURLOPT_FOLLOWLOCATION] = 1;
-            $this->curlOptions[CURLOPT_RETURNTRANSFER] = 1;
+
+        $this->curlOptions[CURLOPT_USERAGENT] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36";
+        $this->curlOptions[CURLOPT_TIMEOUT] = 60;
+        $cookie = "epg_cookie.txt";
+        $this->curlOptions[CURLOPT_COOKIEJAR] = $cookie;
+        $this->curlOptions[CURLOPT_COOKIE] = $cookie;
+        $this->curlOptions[CURLOPT_FOLLOWLOCATION] = 1;
+        $this->curlOptions[CURLOPT_RETURNTRANSFER] = 1;
+
+        foreach ($this->userCurlOptions as $key => $val) {
+            $this->curlOptions[$key] = $val;
         }
         $urlParts = parse_url($url);
         if ($urlParts['scheme'] == 'https') {
